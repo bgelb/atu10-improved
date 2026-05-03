@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  no-hardware-tests:
+    name: No-hardware tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install host test dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang libudev-dev pkg-config
+
+      - name: Run Rust and host-native C tests
+        run: cargo xtask test
+
+  firmware-build:
+    name: XC8 firmware build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install firmware build dependencies
+        run: sudo apt-get update && sudo apt-get install -y make unzip
+
+      - name: Install XC8 and Microchip device packs
+        run: scripts/install-xc8-linux.sh
+
+      - name: Build firmware
+        run: cargo xtask build-firmware
