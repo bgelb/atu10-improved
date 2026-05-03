@@ -34,8 +34,13 @@ if [[ ! -x "${xc8_home}/bin/xc8-cc" ]]; then
     curl --fail --location --retry 3 --output "${download_dir}/${xc8_installer}" "${xc8_url}"
     chmod +x "${download_dir}/${xc8_installer}"
     "${download_dir}/${xc8_installer}" \
+        --installer-language en \
         --mode unattended \
         --unattendedmodeui none \
+        --installerfunction installcompiler \
+        --LicenseType FreeMode \
+        --ModifyAll 0 \
+        --netservername "" \
         --prefix "${xc8_home}"
 fi
 

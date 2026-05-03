@@ -22,8 +22,8 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
-      - name: Install host C compiler
-        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Install host test dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang libudev-dev pkg-config
 
       - name: Run Rust and host-native C tests
         run: cargo xtask test
