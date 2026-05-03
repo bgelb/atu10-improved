@@ -28,6 +28,18 @@ The Makefiles default to Microchip's standard user pack location:
 `$HOME/.mchp_packs/Microchip/...`. Override `PIC1454_DFP` or `PIC18877_DFP` when
 using a different pack install location.
 
+## GitHub CI
+
+The no-hardware test suite runs on GitHub-hosted Linux runners with Rust and
+`clang`; it does not require XC8.
+
+Firmware compile checks do require the free MPLAB XC8 compiler and the pinned
+Microchip DFPs. The CI workflow installs XC8 under `$HOME/.local/microchip` and
+unpacks the DFP `.atpack` files under `$HOME/.mchp_packs/Microchip`, matching
+the paths used by the firmware Makefiles. Before relying on this in a public or
+organization CI environment, review Microchip's installer/license terms for your
+use case.
+
 Project-managed tools and caches should live under `$HOME/.local` or
 `$HOME/.atu10-improved`. Do not require global installs into `/usr/local`,
 Homebrew prefixes, or system directories.
