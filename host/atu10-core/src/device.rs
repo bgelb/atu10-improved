@@ -113,7 +113,10 @@ impl ProgrammerDevice for FakeProgrammer {
     }
 }
 
-pub fn flash_image<D: ProgrammerDevice>(device: &mut D, image: &HexImage) -> Result<FlashPlan> {
+pub fn flash_image<D: ProgrammerDevice + ?Sized>(
+    device: &mut D,
+    image: &HexImage,
+) -> Result<FlashPlan> {
     let plan = FlashPlan::from_image(image, DEFAULT_ROW_SIZE, FLASH_FILL)?;
 
     device.probe()?;

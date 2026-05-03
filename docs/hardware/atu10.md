@@ -20,6 +20,9 @@ Known uncertainty:
 Hardware-only bring-up checklist:
 
 - Bridge enumerates as CDC + HID.
+- CDC enumerates on target host operating systems despite the descriptor
+  skeleton omitting the optional CDC notification endpoint for endpoint-budget
+  reasons.
 - HID probe responds.
 - HID reset toggles F18877 MCLR correctly.
 - CDC tunnel reaches the F18877 UART at 115200.

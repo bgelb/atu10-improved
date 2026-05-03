@@ -9,6 +9,11 @@ as a composite USB device:
 - HID for automatable control: probe, reset, flash, verify, run.
 - CDC ACM for transparent serial access to the running tuner controller.
 
+PIC16F1454 exposes only endpoints 0-2. The current descriptor skeleton reserves
+EP1 IN/OUT for HID control and EP2 IN/OUT for CDC data. It omits a CDC
+notification endpoint, so OS driver compatibility must be verified on real hosts
+during bring-up.
+
 The tuner controller is initially PIC16F18877-class firmware. The first image is
 a 115200 baud hello/echo smoke target so the bridge and host loop can be proven
 before tuner algorithms are built.

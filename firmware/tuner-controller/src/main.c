@@ -6,13 +6,27 @@
 #endif
 
 static void uart_write_byte(uint8_t byte) {
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    while (PIR3bits.TXIF == 0u) {
+    }
+    TX1REG = byte;
+#else
     (void)byte;
-    /* TODO hardware bring-up: wait for EUSART TX ready and write the byte. */
+#endif
 }
 
 static uint8_t uart_read_byte(void) {
-    /* TODO hardware bring-up: wait for EUSART RX and return the received byte. */
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    while (PIR3bits.RCIF == 0u) {
+    }
+    if (RC1STAbits.OERR != 0u) {
+        RC1STAbits.CREN = 0u;
+        RC1STAbits.CREN = 1u;
+    }
+    return RC1REG;
+#else
     return 0u;
+#endif
 }
 
 static void uart_write_string(const char *text) {
@@ -25,10 +39,24 @@ static void uart_write_string(const char *text) {
 }
 
 static void board_init(void) {
-    /*
-     * TODO hardware bring-up: configure oscillator, PPS, and EUSART for
-     * TC_UART_BAUD once the ATU10 target-side pins are confirmed.
-     */
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    OSCCON1 = 0x60u;
+    OSCFRQ = 0x06u;
+
+    ANSELA = 0x00u;
+    ANSELB = 0x00u;
+    ANSELC = 0x00u;
+
+    RXPPS = TC_UART_RX_PPS_INPUT;
+    TC_UART_TX_PPS_REGISTER = TC_UART_TX_PPS_FUNCTION;
+
+    BAUD1CONbits.BRG16 = 1u;
+    TX1STAbits.BRGH = 1u;
+    SP1BRG = TC_UART_SPBRG_VALUE;
+    RC1STAbits.SPEN = 1u;
+    RC1STAbits.CREN = 1u;
+    TX1STAbits.TXEN = 1u;
+#endif
 }
 
 int main(void) {

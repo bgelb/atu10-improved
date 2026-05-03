@@ -1,5 +1,8 @@
 use crate::{Error, Result};
+use serialport::SerialPort;
 use std::collections::VecDeque;
+use std::io::{Read, Write};
+use std::time::Duration;
 
 pub trait SerialTunnel {
     fn read_line(&mut self) -> Result<String>;
@@ -11,6 +14,20 @@ pub trait SerialTunnel {
 pub struct FakeSerialTunnel {
     lines: VecDeque<String>,
     rx: VecDeque<u8>,
+}
+
+pub struct SystemSerialTunnel {
+    port: Box<dyn SerialPort>,
+}
+
+impl SystemSerialTunnel {
+    pub fn open(path: &str, baud: u32) -> Result<Self> {
+        let port = serialport::new(path, baud)
+            .timeout(Duration::from_millis(2000))
+            .open()
+            .map_err(|err| Error::Serial(format!("failed to open serial port {path}: {err}")))?;
+        Ok(Self { port })
+    }
 }
 
 impl Default for FakeSerialTunnel {
@@ -50,7 +67,45 @@ impl SerialTunnel for FakeSerialTunnel {
     }
 }
 
-pub fn serial_smoke<T: SerialTunnel>(serial: &mut T) -> Result<()> {
+impl SerialTunnel for SystemSerialTunnel {
+    fn read_line(&mut self) -> Result<String> {
+        let mut line = Vec::new();
+        loop {
+            let mut byte = [0u8; 1];
+            self.port
+                .read_exact(&mut byte)
+                .map_err(|err| Error::Serial(format!("serial read failed: {err}")))?;
+            if byte[0] == b'\n' {
+                break;
+            }
+            if byte[0] != b'\r' {
+                line.push(byte[0]);
+            }
+            if line.len() > 256 {
+                return Err(Error::Serial("serial line exceeded 256 bytes".to_string()));
+            }
+        }
+
+        String::from_utf8(line)
+            .map_err(|err| Error::Serial(format!("serial line was not UTF-8: {err}")))
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.port
+            .write_all(bytes)
+            .map_err(|err| Error::Serial(format!("serial write failed: {err}")))
+    }
+
+    fn read_exact(&mut self, len: usize) -> Result<Vec<u8>> {
+        let mut bytes = vec![0u8; len];
+        self.port
+            .read_exact(&mut bytes)
+            .map_err(|err| Error::Serial(format!("serial read failed: {err}")))?;
+        Ok(bytes)
+    }
+}
+
+pub fn serial_smoke<T: SerialTunnel + ?Sized>(serial: &mut T) -> Result<()> {
     let hello = serial.read_line()?;
     if !hello.contains("ATU10-IMPROVED READY") {
         return Err(Error::Serial(format!("unexpected hello line: {hello}")));

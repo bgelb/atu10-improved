@@ -5,7 +5,7 @@ BUILD_DIR := build
 
 CFLAGS := -mcpu=$(MCU) -mdfp=$(PIC1454_DFP) -std=c99 -Wall -Wextra
 INCLUDES := -Iinclude -Iboards/atu10
-SOURCES := src/main.c src/protocol_state.c
+SOURCES := src/main.c src/protocol_state.c src/usb_descriptors.c
 
 .PHONY: build clean
 

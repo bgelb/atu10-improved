@@ -1,6 +1,7 @@
 pub mod device;
 pub mod flash;
 pub mod hex;
+pub mod hid;
 pub mod protocol;
 pub mod serial;
 

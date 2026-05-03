@@ -7,9 +7,29 @@
 
 static pb_state_t g_state;
 
+static void delay_cycles(unsigned count) {
+    while (count-- > 0u) {
+#ifdef __XC8
+        __asm("nop");
+#endif
+    }
+}
+
+static void board_init(void) {
+#if defined(__XC8) && PB_ENABLE_TARGET_RESET
+    ANSELA = 0x00u;
+    LATAbits.LATA4 = 1u;
+    TRISAbits.TRISA4 = 0u;
+#endif
+}
+
 static void reset_target(void *ctx) {
     (void)ctx;
-    /* TODO hardware bring-up: drive ATU10 target MCLR through the board circuit. */
+#if defined(__XC8) && PB_ENABLE_TARGET_RESET
+    LATAbits.LATA4 = 0u;
+    delay_cycles(PB_RESET_ASSERT_DELAY_CYCLES);
+    LATAbits.LATA4 = 1u;
+#endif
 }
 
 static void enter_programming(void *ctx) {
@@ -33,7 +53,7 @@ static uint8_t verify(void *ctx) {
 
 static void run_target(void *ctx) {
     (void)ctx;
-    /* TODO hardware bring-up: release programming pins and reset target into run mode. */
+    reset_target(ctx);
 }
 
 int main(void) {
@@ -41,6 +61,7 @@ int main(void) {
         reset_target, enter_programming, program_row, verify, run_target, 0,
     };
 
+    board_init();
     pb_state_init(&g_state);
     (void)hal;
 

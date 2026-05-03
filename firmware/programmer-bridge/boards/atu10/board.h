@@ -3,6 +3,8 @@
 
 #define PB_BOARD_NAME "atu10"
 #define PB_TARGET_UART_BAUD 115200u
+#define PB_ENABLE_TARGET_RESET 1
+#define PB_RESET_ASSERT_DELAY_CYCLES 2000u
 
 /*
  * Hardware confirmation needed:

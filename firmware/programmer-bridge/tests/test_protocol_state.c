@@ -96,6 +96,11 @@ static void test_flash_sequence_calls_hal_in_order_shape(void) {
     TEST_ASSERT_EQUAL_INT(2, fake.last_len);
 
     fill_packet(request, 4u, PB_CMD_VERIFY);
+    request[3] = 4u;
+    request[4] = 0x45u;
+    request[5] = 0xd2u;
+    request[6] = 0x52u;
+    request[7] = 0xf6u;
     TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
     TEST_ASSERT_EQUAL_INT(1, fake.verifies);
 
@@ -118,10 +123,38 @@ static void test_rejects_program_row_before_flash_session(void) {
                           pb_handle_request(&state, NULL, request, response));
 }
 
+static void test_rejects_verify_digest_mismatch(void) {
+    pb_state_t state;
+    fake_hal_t fake = {0};
+    pb_hal_t hal = make_hal(&fake);
+    uint8_t request[PB_HID_PACKET_SIZE];
+    uint8_t response[PB_HID_PACKET_SIZE];
+
+    pb_state_init(&state);
+
+    fill_packet(request, 1u, PB_CMD_START_FLASH);
+    request[3] = 4u;
+    request[4] = 1u;
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+
+    fill_packet(request, 2u, PB_CMD_PROGRAM_ROW);
+    request[3] = 5u;
+    request[4] = 0x20u;
+    request[8] = 0xaau;
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+
+    fill_packet(request, 3u, PB_CMD_VERIFY);
+    request[3] = 4u;
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_BAD_REQUEST,
+                          pb_handle_request(&state, &hal, request, response));
+    TEST_ASSERT_EQUAL_INT(0, fake.verifies);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_probe_returns_protocol_identity);
     RUN_TEST(test_flash_sequence_calls_hal_in_order_shape);
     RUN_TEST(test_rejects_program_row_before_flash_session);
+    RUN_TEST(test_rejects_verify_digest_mismatch);
     return UNITY_END();
 }

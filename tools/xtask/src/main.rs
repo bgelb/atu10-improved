@@ -119,6 +119,14 @@ fn test_all() -> Result<(), String> {
         ],
     )?;
     run_c_unity_test(
+        "programmer-bridge-usb",
+        &[
+            "firmware/programmer-bridge/src/usb_descriptors.c",
+            "firmware/programmer-bridge/tests/test_usb_descriptors.c",
+            "firmware/test-support/unity/unity.c",
+        ],
+    )?;
+    run_c_unity_test(
         "tuner-controller",
         &[
             "firmware/tuner-controller/src/uart_app.c",

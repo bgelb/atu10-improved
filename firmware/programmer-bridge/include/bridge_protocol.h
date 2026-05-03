@@ -35,6 +35,7 @@ typedef struct {
     pb_mode_t mode;
     uint32_t expected_rows;
     uint32_t programmed_rows;
+    uint32_t stream_digest;
 } pb_state_t;
 
 typedef struct {

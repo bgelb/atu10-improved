@@ -20,10 +20,16 @@ static uint32_t read_le32(const uint8_t *data) {
            ((uint32_t)data[3] << 24);
 }
 
+static void digest_byte(pb_state_t *state, uint32_t address, uint8_t value) {
+    uint32_t mixed = state->stream_digest ^ address ^ (uint32_t)value;
+    state->stream_digest = mixed * 0x01000193u;
+}
+
 void pb_state_init(pb_state_t *state) {
     state->mode = PB_MODE_IDLE;
     state->expected_rows = 0u;
     state->programmed_rows = 0u;
+    state->stream_digest = 0x811c9dc5u;
 }
 
 pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
@@ -65,6 +71,7 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
         }
         state->expected_rows = read_le32(payload);
         state->programmed_rows = 0u;
+        state->stream_digest = 0x811c9dc5u;
         state->mode = PB_MODE_PROGRAMMING;
         if (hal != NULL && hal->enter_programming != NULL) {
             hal->enter_programming(hal->ctx);
@@ -76,15 +83,23 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
             status = PB_STATUS_BAD_REQUEST;
             break;
         }
+        uint32_t row_address = read_le32(payload);
         if (hal != NULL && hal->program_row != NULL) {
-            hal->program_row(hal->ctx, read_le32(payload), &payload[4],
-                             (uint8_t)(payload_len - 4u));
+            hal->program_row(hal->ctx, row_address, &payload[4], (uint8_t)(payload_len - 4u));
+        }
+        for (uint8_t i = 0u; i < (uint8_t)(payload_len - 4u); i++) {
+            digest_byte(state, row_address + i, payload[4u + i]);
         }
         state->programmed_rows++;
         break;
 
     case PB_CMD_VERIFY:
-        if (state->mode != PB_MODE_PROGRAMMING) {
+        if (state->mode != PB_MODE_PROGRAMMING || payload_len != 4u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (state->programmed_rows != state->expected_rows ||
+            state->stream_digest != read_le32(payload)) {
             status = PB_STATUS_BAD_REQUEST;
             break;
         }

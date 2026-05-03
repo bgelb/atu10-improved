@@ -94,6 +94,18 @@ pre-commit run --all-files
 workspace may not have every tool installed yet; the scaffold is designed to
 make those gaps explicit.
 
+Host CLI examples:
+
+```sh
+atu10ctl probe --fake
+atu10ctl flash --fake firmware/tuner-controller/build/tuner-controller.hex
+atu10ctl serial --fake
+atu10ctl probe --vid 0x1209 --pid 0xa710
+atu10ctl reset --vid 0x1209 --pid 0xa710
+atu10ctl flash --vid 0x1209 --pid 0xa710 firmware/tuner-controller/build/tuner-controller.hex
+atu10ctl serial --port /dev/cu.usbmodemXXXX --baud 115200
+```
+
 ## No-hardware test strategy
 
 Tests should pull their weight. This repo tests the logic that can fail before
@@ -113,6 +125,9 @@ Meaningful no-hardware tests:
 Hardware-only validation:
 
 - USB enumeration as CDC + HID.
+- CDC driver compatibility with the PIC16F1454 endpoint budget. The descriptor
+  skeleton uses CDC data on EP2 and HID control on EP1, without a CDC
+  notification endpoint.
 - macOS/Linux/Windows driver behavior.
 - CDC buffering and latency.
 - PIC16F1454-to-PIC16F18877 ICSP timing.
