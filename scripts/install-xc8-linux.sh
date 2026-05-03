@@ -37,7 +37,6 @@ if [[ ! -x "${xc8_home}/bin/xc8-cc" ]]; then
         --installer-language en \
         --mode unattended \
         --unattendedmodeui none \
-        --installerfunction installcompiler \
         --LicenseType FreeMode \
         --ModifyAll 0 \
         --netservername "" \
