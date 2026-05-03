@@ -33,7 +33,8 @@ mkdir -p "${download_dir}" "${packs_home}"
 if [[ ! -x "${xc8_home}/bin/xc8-cc" ]]; then
     curl --fail --location --retry 3 --output "${download_dir}/${xc8_installer}" "${xc8_url}"
     chmod +x "${download_dir}/${xc8_installer}"
-    "${download_dir}/${xc8_installer}" \
+    installer_command=(
+        "${download_dir}/${xc8_installer}"
         --installer-language en \
         --mode unattended \
         --unattendedmodeui none \
@@ -41,6 +42,12 @@ if [[ ! -x "${xc8_home}/bin/xc8-cc" ]]; then
         --ModifyAll 0 \
         --netservername "" \
         --prefix "${xc8_home}"
+    )
+    if [[ "$(id -u)" -eq 0 ]]; then
+        "${installer_command[@]}"
+    else
+        sudo "${installer_command[@]}"
+    fi
 fi
 
 if [[ ! -x "${xc8_home}/bin/xc8-cc" ]]; then
