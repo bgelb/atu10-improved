@@ -9,10 +9,13 @@ const MAGIC: u8 = 0xa7;
 pub enum Command {
     Probe = 0x01,
     ResetTarget = 0x02,
-    StartFlash = 0x10,
-    ProgramRow = 0x11,
-    Verify = 0x12,
-    RunTarget = 0x13,
+    ReadTargetId = 0x03,
+    BeginFlash = 0x10,
+    EraseRow = 0x11,
+    WriteChunk = 0x12,
+    CommitRow = 0x13,
+    VerifyRange = 0x14,
+    RunTarget = 0x15,
 }
 
 impl Command {
@@ -20,10 +23,13 @@ impl Command {
         match value {
             0x01 => Ok(Self::Probe),
             0x02 => Ok(Self::ResetTarget),
-            0x10 => Ok(Self::StartFlash),
-            0x11 => Ok(Self::ProgramRow),
-            0x12 => Ok(Self::Verify),
-            0x13 => Ok(Self::RunTarget),
+            0x03 => Ok(Self::ReadTargetId),
+            0x10 => Ok(Self::BeginFlash),
+            0x11 => Ok(Self::EraseRow),
+            0x12 => Ok(Self::WriteChunk),
+            0x13 => Ok(Self::CommitRow),
+            0x14 => Ok(Self::VerifyRange),
+            0x15 => Ok(Self::RunTarget),
             _ => Err(Error::Protocol(format!("unknown command 0x{value:02x}"))),
         }
     }
@@ -152,7 +158,7 @@ mod tests {
     fn request_round_trips_through_hid_packet() {
         let request = Request {
             sequence: 42,
-            command: Command::ProgramRow,
+            command: Command::WriteChunk,
             payload: vec![1, 2, 3],
         };
 

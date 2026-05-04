@@ -1,5 +1,4 @@
 use crate::device::{ProbeInfo, ProgrammerDevice};
-use crate::flash::FlashRow;
 use crate::protocol::{
     decode_response, encode_request, Command, Request, Status, HID_PACKET_SIZE, MAX_PAYLOAD_SIZE,
 };
@@ -31,7 +30,7 @@ impl ProgrammerDevice for HidProgrammer {
         let target_name = String::from_utf8_lossy(&response).to_string();
         Ok(ProbeInfo {
             bridge_name: "atu10-programmer-bridge".to_string(),
-            protocol_version: 1,
+            protocol_version: 2,
             target_name,
         })
     }
@@ -41,24 +40,55 @@ impl ProgrammerDevice for HidProgrammer {
         Ok(())
     }
 
-    fn start_flash(&mut self, row_count: u32) -> Result<()> {
+    fn read_target_id(&mut self) -> Result<u16> {
+        let response = self.transport.command(Command::ReadTargetId, &[])?;
+        if response.len() != 2 {
+            return Err(Error::Protocol(format!(
+                "read-id response has {} bytes, expected 2",
+                response.len()
+            )));
+        }
+        Ok(u16::from_le_bytes([response[0], response[1]]))
+    }
+
+    fn begin_flash(&mut self, row_count: u32) -> Result<()> {
         self.transport
-            .command(Command::StartFlash, &row_count.to_le_bytes())?;
+            .command(Command::BeginFlash, &row_count.to_le_bytes())?;
         Ok(())
     }
 
-    fn program_row(&mut self, row: &FlashRow) -> Result<()> {
-        let mut payload = Vec::with_capacity(4 + row.data.len());
-        payload.extend_from_slice(&row.base_address.to_le_bytes());
-        payload.extend_from_slice(&row.data);
-        self.transport.command(Command::ProgramRow, &payload)?;
+    fn erase_row(&mut self, base_word_address: u32) -> Result<()> {
+        self.transport
+            .command(Command::EraseRow, &base_word_address.to_le_bytes())?;
         Ok(())
     }
 
-    fn verify(&mut self, expected: &BTreeMap<u32, u8>) -> Result<()> {
-        let digest = verify_digest(expected);
+    fn write_chunk(&mut self, base_word_address: u32, offset_bytes: u8, data: &[u8]) -> Result<()> {
+        let mut payload = Vec::with_capacity(5 + data.len());
+        payload.extend_from_slice(&base_word_address.to_le_bytes());
+        payload.push(offset_bytes);
+        payload.extend_from_slice(data);
+        self.transport.command(Command::WriteChunk, &payload)?;
+        Ok(())
+    }
+
+    fn commit_row(&mut self, base_word_address: u32) -> Result<()> {
         self.transport
-            .command(Command::Verify, &digest.to_le_bytes())?;
+            .command(Command::CommitRow, &base_word_address.to_le_bytes())?;
+        Ok(())
+    }
+
+    fn verify_range(&mut self, base_word_address: u32, expected: &[u16]) -> Result<()> {
+        let digest = verify_digest(base_word_address, expected);
+        let mut payload = Vec::with_capacity(10);
+        payload.extend_from_slice(&base_word_address.to_le_bytes());
+        payload.extend_from_slice(
+            &u16::try_from(expected.len())
+                .map_err(|_| Error::Device("verify range is too large".to_string()))?
+                .to_le_bytes(),
+        );
+        payload.extend_from_slice(&digest.to_le_bytes());
+        self.transport.command(Command::VerifyRange, &payload)?;
         Ok(())
     }
 
@@ -146,9 +176,20 @@ impl HidTransport {
     }
 }
 
-pub fn verify_digest(bytes: &BTreeMap<u32, u8>) -> u32 {
-    bytes.iter().fold(0x811c_9dc5u32, |hash, (address, value)| {
-        let mixed = hash ^ address ^ u32::from(*value);
+pub fn verify_digest(base_word_address: u32, words: &[u16]) -> u32 {
+    words
+        .iter()
+        .enumerate()
+        .fold(0x811c_9dc5u32, |hash, (index, value)| {
+            let address = base_word_address + index as u32;
+            let mixed = hash ^ address ^ u32::from(*value & 0x3fff);
+            mixed.wrapping_mul(0x0100_0193)
+        })
+}
+
+pub fn verify_map_digest(words: &BTreeMap<u32, u16>) -> u32 {
+    words.iter().fold(0x811c_9dc5u32, |hash, (address, value)| {
+        let mixed = hash ^ address ^ u32::from(*value & 0x3fff);
         mixed.wrapping_mul(0x0100_0193)
     })
 }
@@ -159,14 +200,11 @@ mod tests {
 
     #[test]
     fn verify_digest_changes_with_address_and_data() {
-        let mut first = BTreeMap::new();
-        first.insert(0x10, 0xaa);
-        let mut second = BTreeMap::new();
-        second.insert(0x11, 0xaa);
-        let mut third = BTreeMap::new();
-        third.insert(0x10, 0xab);
+        let first = verify_digest(0x10, &[0xaa]);
+        let second = verify_digest(0x11, &[0xaa]);
+        let third = verify_digest(0x10, &[0xab]);
 
-        assert_ne!(verify_digest(&first), verify_digest(&second));
-        assert_ne!(verify_digest(&first), verify_digest(&third));
+        assert_ne!(first, second);
+        assert_ne!(first, third);
     }
 }

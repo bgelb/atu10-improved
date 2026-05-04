@@ -52,6 +52,34 @@ pk2cmd -PPIC16F1454 -I -R
 The `-R` option releases `/MCLR` after the operation. Avoid erase/program
 commands until the target wiring and image are intentional.
 
+The project helper is deliberately conservative:
+
+```sh
+cargo xtask flash-bridge
+```
+
+builds the bridge and saves a PIC16F1454 config readback under `target/xtask/`,
+then refuses to program because `pk2cmd` cannot prove config-word preservation
+for a full erase/program cycle. Use `--allow-config-write` only when replacing
+the bridge firmware and accepting the config-word risk is intentional.
+
+After a custom bridge is installed and enumerating as `0x1209:0xa710`, the
+intended F18877 smoke path is:
+
+```sh
+cargo xtask build-firmware
+atu10ctl read-id --vid 0x1209 --pid 0xa710
+atu10ctl flash --vid 0x1209 --pid 0xa710 firmware/tuner-controller/build/tuner-controller.hex
+atu10ctl serial --port /dev/ttyACM0 --baud 115200
+cargo xtask test-hardware --vid 0x1209 --pid 0xa710 --serial /dev/ttyACM0
+```
+
+Current implementation note: the repository has the HID protocol, descriptors,
+F18877 ICSP layer, and CDC/serial host tooling, but not a complete PIC16F1454
+USB service loop yet. HID packets must be wired to `pb_handle_request()` and CDC
+EP2 must be wired to the target UART before the custom bridge can replace the
+stock firmware for end-to-end use.
+
 ### Linux USB permissions
 
 The PICkit3 needs a udev rule so normal users in `plugdev` can access it.

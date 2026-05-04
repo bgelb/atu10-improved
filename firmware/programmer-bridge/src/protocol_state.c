@@ -20,16 +20,14 @@ static uint32_t read_le32(const uint8_t *data) {
            ((uint32_t)data[3] << 24);
 }
 
-static void digest_byte(pb_state_t *state, uint32_t address, uint8_t value) {
-    uint32_t mixed = state->stream_digest ^ address ^ (uint32_t)value;
-    state->stream_digest = mixed * 0x01000193u;
+static uint16_t read_le16(const uint8_t *data) {
+    return (uint16_t)(((uint16_t)data[0]) | ((uint16_t)data[1] << 8));
 }
 
 void pb_state_init(pb_state_t *state) {
     state->mode = PB_MODE_IDLE;
     state->expected_rows = 0u;
-    state->programmed_rows = 0u;
-    state->stream_digest = 0x811c9dc5u;
+    state->committed_rows = 0u;
 }
 
 pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
@@ -64,52 +62,91 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
         state->mode = PB_MODE_IDLE;
         break;
 
-    case PB_CMD_START_FLASH:
+    case PB_CMD_READ_TARGET_ID: {
+        uint16_t target_id = 0u;
+        uint8_t target_payload[2];
+        if (payload_len != 0u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (hal == NULL || hal->read_target_id == NULL) {
+            status = PB_STATUS_HARDWARE_FAULT;
+            break;
+        }
+        target_id = hal->read_target_id(hal->ctx);
+        target_payload[0] = (uint8_t)(target_id & 0xffu);
+        target_payload[1] = (uint8_t)(target_id >> 8);
+        write_response(sequence, PB_STATUS_OK, target_payload, sizeof(target_payload), response);
+        return PB_STATUS_OK;
+    }
+
+    case PB_CMD_BEGIN_FLASH:
         if (payload_len != 4u) {
             status = PB_STATUS_BAD_REQUEST;
             break;
         }
         state->expected_rows = read_le32(payload);
-        state->programmed_rows = 0u;
-        state->stream_digest = 0x811c9dc5u;
+        state->committed_rows = 0u;
         state->mode = PB_MODE_PROGRAMMING;
         if (hal != NULL && hal->enter_programming != NULL) {
             hal->enter_programming(hal->ctx);
         }
         break;
 
-    case PB_CMD_PROGRAM_ROW:
-        if (state->mode != PB_MODE_PROGRAMMING || payload_len < 5u) {
-            status = PB_STATUS_BAD_REQUEST;
-            break;
-        }
-        uint32_t row_address = read_le32(payload);
-        if (hal != NULL && hal->program_row != NULL) {
-            hal->program_row(hal->ctx, row_address, &payload[4], (uint8_t)(payload_len - 4u));
-        }
-        for (uint8_t i = 0u; i < (uint8_t)(payload_len - 4u); i++) {
-            digest_byte(state, row_address + i, payload[4u + i]);
-        }
-        state->programmed_rows++;
-        break;
-
-    case PB_CMD_VERIFY:
+    case PB_CMD_ERASE_ROW:
         if (state->mode != PB_MODE_PROGRAMMING || payload_len != 4u) {
             status = PB_STATUS_BAD_REQUEST;
             break;
         }
-        if (state->programmed_rows != state->expected_rows ||
-            state->stream_digest != read_le32(payload)) {
+        if (hal != NULL && hal->erase_row != NULL) {
+            hal->erase_row(hal->ctx, read_le32(payload));
+        }
+        break;
+
+    case PB_CMD_WRITE_CHUNK:
+        if (state->mode != PB_MODE_PROGRAMMING || payload_len < 6u) {
             status = PB_STATUS_BAD_REQUEST;
             break;
         }
-        if (hal != NULL && hal->verify != NULL && hal->verify(hal->ctx) == 0u) {
+        if (hal != NULL && hal->write_chunk != NULL) {
+            hal->write_chunk(hal->ctx, read_le32(payload), payload[4], &payload[5],
+                             (uint8_t)(payload_len - 5u));
+        }
+        break;
+
+    case PB_CMD_COMMIT_ROW:
+        if (state->mode != PB_MODE_PROGRAMMING || payload_len != 4u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (hal != NULL && hal->commit_row != NULL) {
+            hal->commit_row(hal->ctx, read_le32(payload));
+        }
+        state->committed_rows++;
+        break;
+
+    case PB_CMD_VERIFY_RANGE:
+        if (state->mode != PB_MODE_PROGRAMMING || payload_len != 10u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (state->committed_rows > state->expected_rows) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (hal == NULL || hal->verify_range == NULL ||
+            hal->verify_range(hal->ctx, read_le32(payload), read_le16(&payload[4]),
+                              read_le32(&payload[6])) == 0u) {
             status = PB_STATUS_VERIFY_FAILED;
             break;
         }
         break;
 
     case PB_CMD_RUN_TARGET:
+        if (payload_len != 0u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
         if (hal != NULL && hal->run_target != NULL) {
             hal->run_target(hal->ctx);
         }

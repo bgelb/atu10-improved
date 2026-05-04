@@ -10,6 +10,8 @@ fn main() -> ExitCode {
         Some("build-host") => build_host(),
         Some("build-firmware") => build_firmware(),
         Some("test") => test_all(),
+        Some("test-hardware") => test_hardware(&args[1..]),
+        Some("flash-bridge") => flash_bridge(args.iter().any(|arg| arg == "--allow-config-write")),
         Some("format") => format(args.iter().any(|arg| arg == "--fix")),
         Some("help") | Some("--help") | Some("-h") | None => {
             print_usage();
@@ -29,7 +31,7 @@ fn main() -> ExitCode {
 
 fn print_usage() {
     println!(
-        "usage: cargo xtask <command>\n\ncommands:\n  doctor\n  build-host\n  build-firmware\n  test\n  format [--fix]"
+        "usage: cargo xtask <command>\n\ncommands:\n  doctor\n  build-host\n  build-firmware\n  test\n  test-hardware --vid <vid> --pid <pid> --serial <path>\n  flash-bridge [--allow-config-write]\n  format [--fix]"
     );
 }
 
@@ -108,6 +110,18 @@ fn build_firmware() -> Result<(), String> {
     )
 }
 
+fn build_bridge_firmware() -> Result<(), String> {
+    let xc8 = find_first_command(["xc8-cc", "xc8"]).ok_or_else(|| {
+        "XC8 not found. Install free MPLAB XC8 and ensure xc8-cc or xc8 is on PATH.".to_string()
+    })?;
+
+    run_make(
+        Path::new("firmware/programmer-bridge"),
+        "build",
+        &[("XC8", xc8.as_os_str())],
+    )
+}
+
 fn test_all() -> Result<(), String> {
     run("cargo", ["test", "-p", "atu10-core", "-p", "atu10ctl"])?;
     run_c_unity_test(
@@ -132,6 +146,75 @@ fn test_all() -> Result<(), String> {
             "firmware/tuner-controller/src/uart_app.c",
             "firmware/tuner-controller/tests/test_uart_app.c",
             "firmware/test-support/unity/unity.c",
+        ],
+    )
+}
+
+fn test_hardware(args: &[String]) -> Result<(), String> {
+    let vid = arg_value(args, "--vid")?;
+    let pid = arg_value(args, "--pid")?;
+    let serial = arg_value(args, "--serial")?;
+    let mut command = Command::new("cargo");
+    command
+        .args([
+            "test",
+            "-p",
+            "atu10ctl",
+            "--test",
+            "hardware",
+            "--",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("ATU10_HID_VID", vid)
+        .env("ATU10_HID_PID", pid)
+        .env("ATU10_SERIAL_PORT", serial);
+    run_command(command)
+}
+
+fn flash_bridge(allow_config_write: bool) -> Result<(), String> {
+    build_bridge_firmware()?;
+    let pk2cmd = find_first_command(["pk2cmd"])
+        .or_else(|| {
+            env::var_os("HOME").and_then(|home| {
+                let home = PathBuf::from(home);
+                [
+                    home.join(".atu10-improved/tools/pk2cmd/pk2cmd"),
+                    home.join(".atu10-improved/tools/pk2cmd/squashfs-root/usr/bin/pk2cmd"),
+                ]
+                .into_iter()
+                .find(|path| path.is_file())
+            })
+        })
+        .ok_or_else(|| {
+            "pk2cmd not found on PATH or under $HOME/.atu10-improved/tools/pk2cmd".to_string()
+        })?;
+
+    let config = command_output(Command::new(&pk2cmd).args(["-PPIC16F1454", "-GC", "-R"]))?;
+    let out_dir = Path::new("target/xtask");
+    std::fs::create_dir_all(out_dir).map_err(|err| err.to_string())?;
+    let config_path = out_dir.join("pic16f1454-config-before.txt");
+    std::fs::write(&config_path, config).map_err(|err| err.to_string())?;
+    println!(
+        "saved current PIC16F1454 config readback to {}",
+        config_path.display()
+    );
+
+    if !allow_config_write {
+        return Err(
+            "refusing to program bridge without --allow-config-write; pk2cmd cannot prove config-word preservation for a full erase/program cycle"
+                .to_string(),
+        );
+    }
+
+    let hex = "firmware/programmer-bridge/build/programmer-bridge.hex";
+    run_path(
+        &pk2cmd,
+        vec![
+            "-PPIC16F1454".to_string(),
+            format!("-F{hex}"),
+            "-M".to_string(),
+            "-R".to_string(),
         ],
     )
 }
@@ -240,6 +323,19 @@ fn run_command(mut command: Command) -> Result<(), String> {
     }
 }
 
+fn command_output(command: &mut Command) -> Result<String, String> {
+    println!("running: {command:?}");
+    let output = command.output().map_err(|err| err.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "command failed with status {}: {command:?}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 fn command_exists(program: &str) -> bool {
     find_first_command([program]).is_some()
 }
@@ -271,6 +367,16 @@ where
         }
     }
     None
+}
+
+fn arg_value<'a>(args: &'a [String], flag: &str) -> Result<&'a str, String> {
+    let index = args
+        .iter()
+        .position(|arg| arg == flag)
+        .ok_or_else(|| format!("missing required {flag}"))?;
+    args.get(index + 1)
+        .map(String::as_str)
+        .ok_or_else(|| format!("missing value for {flag}"))
 }
 
 fn default_dfp_path(pack: &str, version: &str) -> PathBuf {

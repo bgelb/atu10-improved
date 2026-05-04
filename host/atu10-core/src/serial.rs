@@ -1,7 +1,8 @@
 use crate::{Error, Result};
 use serialport::SerialPort;
 use std::collections::VecDeque;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
+use std::thread;
 use std::time::Duration;
 
 pub trait SerialTunnel {
@@ -27,6 +28,52 @@ impl SystemSerialTunnel {
             .open()
             .map_err(|err| Error::Serial(format!("failed to open serial port {path}: {err}")))?;
         Ok(Self { port })
+    }
+
+    pub fn console(path: &str, baud: u32) -> Result<()> {
+        let mut rx = serialport::new(path, baud)
+            .timeout(Duration::from_millis(100))
+            .open()
+            .map_err(|err| Error::Serial(format!("failed to open serial port {path}: {err}")))?;
+        let mut tx = rx
+            .try_clone()
+            .map_err(|err| Error::Serial(format!("failed to clone serial port {path}: {err}")))?;
+
+        let stdin_thread = thread::spawn(move || {
+            let mut stdin = io::stdin();
+            let mut buf = [0u8; 256];
+            loop {
+                match stdin.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(len) => {
+                        if tx.write_all(&buf[..len]).is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let mut stdout = io::stdout();
+        let mut buf = [0u8; 256];
+        loop {
+            match rx.read(&mut buf) {
+                Ok(0) => {}
+                Ok(len) => stdout
+                    .write_all(&buf[..len])
+                    .and_then(|_| stdout.flush())
+                    .map_err(|err| Error::Serial(format!("stdout write failed: {err}")))?,
+                Err(ref err) if err.kind() == io::ErrorKind::TimedOut => {
+                    if stdin_thread.is_finished() {
+                        break;
+                    }
+                }
+                Err(err) => return Err(Error::Serial(format!("serial read failed: {err}"))),
+            }
+        }
+
+        Ok(())
     }
 }
 

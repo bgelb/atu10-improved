@@ -1,4 +1,5 @@
-use atu10_core::device::{flash_image, DeviceEvent, FakeProgrammer, DEFAULT_ROW_SIZE};
+use atu10_core::device::{flash_image, DeviceEvent, FakeProgrammer};
+use atu10_core::flash::F18877_ROW_WORDS;
 use atu10_core::hex::HexImage;
 use atu10_core::serial::{serial_smoke, FakeSerialTunnel};
 
@@ -18,9 +19,10 @@ fn flash_reset_run_pipeline_works_against_fake_bridge() {
     assert_eq!(bridge.events().first(), Some(&DeviceEvent::Probe));
     assert!(bridge
         .events()
-        .contains(&DeviceEvent::StartFlash { row_count: 2 }));
-    assert!(bridge.events().contains(&DeviceEvent::Verify {
-        byte_count: DEFAULT_ROW_SIZE * 2
+        .contains(&DeviceEvent::BeginFlash { row_count: 2 }));
+    assert!(bridge.events().contains(&DeviceEvent::VerifyRange {
+        base_word_address: 0,
+        word_count: F18877_ROW_WORDS
     }));
     assert_eq!(bridge.events().last(), Some(&DeviceEvent::RunTarget));
 }

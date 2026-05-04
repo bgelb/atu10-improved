@@ -5,16 +5,19 @@
 
 #define PB_HID_PACKET_SIZE 64u
 #define PB_MAX_PAYLOAD_SIZE 60u
-#define PB_PROTOCOL_VERSION 1u
+#define PB_PROTOCOL_VERSION 2u
 #define PB_MAGIC 0xa7u
 
 typedef enum {
     PB_CMD_PROBE = 0x01u,
     PB_CMD_RESET_TARGET = 0x02u,
-    PB_CMD_START_FLASH = 0x10u,
-    PB_CMD_PROGRAM_ROW = 0x11u,
-    PB_CMD_VERIFY = 0x12u,
-    PB_CMD_RUN_TARGET = 0x13u,
+    PB_CMD_READ_TARGET_ID = 0x03u,
+    PB_CMD_BEGIN_FLASH = 0x10u,
+    PB_CMD_ERASE_ROW = 0x11u,
+    PB_CMD_WRITE_CHUNK = 0x12u,
+    PB_CMD_COMMIT_ROW = 0x13u,
+    PB_CMD_VERIFY_RANGE = 0x14u,
+    PB_CMD_RUN_TARGET = 0x15u,
 } pb_command_t;
 
 typedef enum {
@@ -34,15 +37,19 @@ typedef enum {
 typedef struct {
     pb_mode_t mode;
     uint32_t expected_rows;
-    uint32_t programmed_rows;
-    uint32_t stream_digest;
+    uint32_t committed_rows;
 } pb_state_t;
 
 typedef struct {
     void (*reset_target)(void *ctx);
     void (*enter_programming)(void *ctx);
-    void (*program_row)(void *ctx, uint32_t address, const uint8_t *data, uint8_t len);
-    uint8_t (*verify)(void *ctx);
+    uint16_t (*read_target_id)(void *ctx);
+    void (*erase_row)(void *ctx, uint32_t base_word_address);
+    void (*write_chunk)(void *ctx, uint32_t base_word_address, uint8_t offset_bytes,
+                        const uint8_t *data, uint8_t len);
+    void (*commit_row)(void *ctx, uint32_t base_word_address);
+    uint8_t (*verify_range)(void *ctx, uint32_t base_word_address, uint16_t word_count,
+                            uint32_t expected_digest);
     void (*run_target)(void *ctx);
     void *ctx;
 } pb_hal_t;
