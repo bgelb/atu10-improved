@@ -35,6 +35,10 @@ Commands:
 - `0x14` verify range. Payload: `u32 base_word_address_le`,
   `u16 word_count_le`, `u32 digest_le`.
 - `0x15` run target.
+- `0x16` read words. Payload: `u32 base_word_address_le`,
+  `u16 word_count_le`. Response payload: little-endian 14-bit words. This is
+  read-only and is used for diagnostics/readback; it does not enable config
+  writes.
 
 The verify digest is a small FNV-1a-style guard over 14-bit words:
 

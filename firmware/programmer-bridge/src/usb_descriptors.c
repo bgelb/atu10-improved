@@ -62,7 +62,7 @@ const uint8_t pb_usb_config_descriptor[PB_USB_CONFIG_TOTAL_LEN] = {
     0x04,
     0,
     0,
-    0, /* endpoint count: no notification endpoint on PIC16F1454 endpoint budget */
+    1, /* CDC notification endpoint */
     0x02,
     0x02,
     0x01,
@@ -90,6 +90,14 @@ const uint8_t pb_usb_config_descriptor[PB_USB_CONFIG_TOTAL_LEN] = {
     0x01,
     0,
     1,
+
+    7, /* CDC notification IN EP3 */
+    0x05,
+    0x83,
+    0x03,
+    PB_USB_CDC_NOTIFY_EP_SIZE,
+    0,
+    16,
 
     9, /* CDC data interface */
     0x04,

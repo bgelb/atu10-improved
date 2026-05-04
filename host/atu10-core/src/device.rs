@@ -22,6 +22,7 @@ pub trait ProgrammerDevice {
     fn write_chunk(&mut self, base_word_address: u32, offset_bytes: u8, data: &[u8]) -> Result<()>;
     fn commit_row(&mut self, base_word_address: u32) -> Result<()>;
     fn verify_range(&mut self, base_word_address: u32, expected: &[u16]) -> Result<()>;
+    fn read_words(&mut self, base_word_address: u32, word_count: usize) -> Result<Vec<u16>>;
     fn run_target(&mut self) -> Result<()>;
 }
 
@@ -45,6 +46,10 @@ pub enum DeviceEvent {
         base_word_address: u32,
     },
     VerifyRange {
+        base_word_address: u32,
+        word_count: usize,
+    },
+    ReadWords {
         base_word_address: u32,
         word_count: usize,
     },
@@ -181,6 +186,21 @@ impl ProgrammerDevice for FakeProgrammer {
             }
         }
         Ok(())
+    }
+
+    fn read_words(&mut self, base_word_address: u32, word_count: usize) -> Result<Vec<u16>> {
+        self.events.push(DeviceEvent::ReadWords {
+            base_word_address,
+            word_count,
+        });
+        Ok((0..word_count)
+            .map(|index| {
+                self.memory
+                    .get(&(base_word_address + u32::try_from(index).unwrap()))
+                    .copied()
+                    .unwrap_or(0x3fff)
+            })
+            .collect())
     }
 
     fn run_target(&mut self) -> Result<()> {

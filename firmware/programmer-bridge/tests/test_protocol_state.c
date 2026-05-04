@@ -11,6 +11,7 @@ typedef struct {
     unsigned writes;
     unsigned commits;
     unsigned verifies;
+    unsigned reads_words;
     unsigned runs;
     uint32_t last_address;
     uint32_t last_digest;
@@ -60,6 +61,19 @@ static uint8_t verify_range(void *ctx, uint32_t base_word_address, uint16_t word
     return 1u;
 }
 
+static uint8_t read_words(void *ctx, uint32_t base_word_address, uint16_t word_count,
+                          uint8_t *out) {
+    fake_hal_t *fake = (fake_hal_t *)ctx;
+    fake->reads_words++;
+    fake->last_address = base_word_address;
+    fake->last_word_count = word_count;
+    out[0] = 0x34u;
+    out[1] = 0x12u;
+    out[2] = 0xffu;
+    out[3] = 0x3fu;
+    return 1u;
+}
+
 static void run_target(void *ctx) { ((fake_hal_t *)ctx)->runs++; }
 
 static pb_hal_t make_hal(fake_hal_t *fake) {
@@ -71,6 +85,7 @@ static pb_hal_t make_hal(fake_hal_t *fake) {
     hal.write_chunk = write_chunk;
     hal.commit_row = commit_row;
     hal.verify_range = verify_range;
+    hal.read_words = read_words;
     hal.run_target = run_target;
     hal.ctx = fake;
     return hal;
@@ -122,10 +137,30 @@ static void test_read_target_id_returns_little_endian_id(void) {
     fill_packet(request, 7u, PB_CMD_READ_TARGET_ID);
 
     TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+    TEST_ASSERT_EQUAL_INT(PB_MODE_PROGRAMMING, state.mode);
     TEST_ASSERT_EQUAL_INT(1, fake.reads_id);
     TEST_ASSERT_EQUAL_UINT8(2u, response[3]);
     TEST_ASSERT_EQUAL_UINT8(0x75u, response[4]);
     TEST_ASSERT_EQUAL_UINT8(0x30u, response[5]);
+}
+
+static void test_begin_flash_reuses_programming_session_after_read_id(void) {
+    pb_state_t state;
+    fake_hal_t fake = {0};
+    pb_hal_t hal = make_hal(&fake);
+    uint8_t request[PB_HID_PACKET_SIZE];
+    uint8_t response[PB_HID_PACKET_SIZE];
+
+    pb_state_init(&state);
+    fill_packet(request, 1u, PB_CMD_READ_TARGET_ID);
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+
+    fill_packet(request, 2u, PB_CMD_BEGIN_FLASH);
+    request[3] = 4u;
+    request[4] = 1u;
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+    TEST_ASSERT_EQUAL_INT(0, fake.enters_programming);
+    TEST_ASSERT_EQUAL_INT(PB_MODE_PROGRAMMING, state.mode);
 }
 
 static void test_flash_sequence_calls_hal_in_order_shape(void) {
@@ -219,12 +254,40 @@ static void test_verify_failure_surfaces_status(void) {
                           pb_handle_request(&state, NULL, request, response));
 }
 
+static void test_read_words_enters_programming_and_returns_words(void) {
+    pb_state_t state;
+    fake_hal_t fake = {0};
+    pb_hal_t hal = make_hal(&fake);
+    uint8_t request[PB_HID_PACKET_SIZE];
+    uint8_t response[PB_HID_PACKET_SIZE];
+
+    pb_state_init(&state);
+    fill_packet(request, 1u, PB_CMD_READ_WORDS);
+    request[3] = 6u;
+    write_le32(&request[4], 0x8007u);
+    write_le16(&request[8], 2u);
+
+    TEST_ASSERT_EQUAL_INT(PB_STATUS_OK, pb_handle_request(&state, &hal, request, response));
+    TEST_ASSERT_EQUAL_INT(PB_MODE_PROGRAMMING, state.mode);
+    TEST_ASSERT_EQUAL_INT(1, fake.enters_programming);
+    TEST_ASSERT_EQUAL_INT(1, fake.reads_words);
+    TEST_ASSERT_EQUAL_INT(0x8007, fake.last_address);
+    TEST_ASSERT_EQUAL_INT(2, fake.last_word_count);
+    TEST_ASSERT_EQUAL_UINT8(4u, response[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x34u, response[4]);
+    TEST_ASSERT_EQUAL_UINT8(0x12u, response[5]);
+    TEST_ASSERT_EQUAL_UINT8(0xffu, response[6]);
+    TEST_ASSERT_EQUAL_UINT8(0x3fu, response[7]);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_probe_returns_protocol_identity);
     RUN_TEST(test_read_target_id_returns_little_endian_id);
+    RUN_TEST(test_begin_flash_reuses_programming_session_after_read_id);
     RUN_TEST(test_flash_sequence_calls_hal_in_order_shape);
     RUN_TEST(test_rejects_write_before_flash_session);
     RUN_TEST(test_verify_failure_surfaces_status);
+    RUN_TEST(test_read_words_enters_programming_and_returns_words);
     return UNITY_END();
 }

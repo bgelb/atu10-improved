@@ -1,3 +1,4 @@
+pub mod cdc_control;
 pub mod device;
 pub mod flash;
 pub mod hex;

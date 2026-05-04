@@ -38,6 +38,15 @@ static void uart_write_string(const char *text) {
     uart_write_byte('\n');
 }
 
+static void startup_delay(void) {
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    unsigned long count = TC_UART_STARTUP_DELAY_CYCLES;
+    while (count-- > 0u) {
+        __asm("nop");
+    }
+#endif
+}
+
 static void pps_unlock(void) {
 #if defined(__XC8) && TC_ENABLE_HW_UART
     PPSLOCK = 0x55u;
@@ -83,6 +92,7 @@ static void board_init(void) {
 
 int main(void) {
     board_init();
+    startup_delay();
     uart_write_string(tc_hello_line());
 
     for (;;) {

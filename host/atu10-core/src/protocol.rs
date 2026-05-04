@@ -16,6 +16,7 @@ pub enum Command {
     CommitRow = 0x13,
     VerifyRange = 0x14,
     RunTarget = 0x15,
+    ReadWords = 0x16,
 }
 
 impl Command {
@@ -30,6 +31,7 @@ impl Command {
             0x13 => Ok(Self::CommitRow),
             0x14 => Ok(Self::VerifyRange),
             0x15 => Ok(Self::RunTarget),
+            0x16 => Ok(Self::ReadWords),
             _ => Err(Error::Protocol(format!("unknown command 0x{value:02x}"))),
         }
     }

@@ -13,6 +13,7 @@
  * board is traced or the schematic is confirmed.
  */
 #define PB_PIN_TARGET_MCLR_RA4 1
+#define PB_PIN_TARGET_MCLR_RA4_ACTIVE_HIGH 1
 #define PB_PIN_TARGET_ICSPDAT_RC4 1
 #define PB_PIN_TARGET_ICSPCLK_RC5 1
 #define PB_PIN_TARGET_UART_TX_RC4 1

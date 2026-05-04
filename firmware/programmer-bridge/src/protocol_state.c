@@ -74,6 +74,7 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
             break;
         }
         target_id = hal->read_target_id(hal->ctx);
+        state->mode = PB_MODE_PROGRAMMING;
         target_payload[0] = (uint8_t)(target_id & 0xffu);
         target_payload[1] = (uint8_t)(target_id >> 8);
         write_response(sequence, PB_STATUS_OK, target_payload, sizeof(target_payload), response);
@@ -87,10 +88,10 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
         }
         state->expected_rows = read_le32(payload);
         state->committed_rows = 0u;
-        state->mode = PB_MODE_PROGRAMMING;
-        if (hal != NULL && hal->enter_programming != NULL) {
+        if (state->mode != PB_MODE_PROGRAMMING && hal != NULL && hal->enter_programming != NULL) {
             hal->enter_programming(hal->ctx);
         }
+        state->mode = PB_MODE_PROGRAMMING;
         break;
 
     case PB_CMD_ERASE_ROW:
@@ -152,6 +153,33 @@ pb_status_t pb_handle_request(pb_state_t *state, const pb_hal_t *hal,
         }
         state->mode = PB_MODE_RUNNING;
         break;
+
+    case PB_CMD_READ_WORDS: {
+        uint16_t word_count;
+        uint8_t read_payload[PB_MAX_PAYLOAD_SIZE];
+        if (payload_len != 6u) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        word_count = read_le16(&payload[4]);
+        if (word_count == 0u || word_count > (PB_MAX_PAYLOAD_SIZE / 2u) || hal == NULL ||
+            hal->read_words == NULL) {
+            status = PB_STATUS_BAD_REQUEST;
+            break;
+        }
+        if (state->mode != PB_MODE_PROGRAMMING) {
+            if (hal->enter_programming != NULL) {
+                hal->enter_programming(hal->ctx);
+            }
+            state->mode = PB_MODE_PROGRAMMING;
+        }
+        if (hal->read_words(hal->ctx, read_le32(payload), word_count, read_payload) == 0u) {
+            status = PB_STATUS_HARDWARE_FAULT;
+            break;
+        }
+        write_response(sequence, PB_STATUS_OK, read_payload, (uint8_t)(word_count * 2u), response);
+        return PB_STATUS_OK;
+    }
 
     default:
         status = PB_STATUS_BAD_REQUEST;

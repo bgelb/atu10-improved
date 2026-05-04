@@ -18,6 +18,7 @@ typedef enum {
     PB_CMD_COMMIT_ROW = 0x13u,
     PB_CMD_VERIFY_RANGE = 0x14u,
     PB_CMD_RUN_TARGET = 0x15u,
+    PB_CMD_READ_WORDS = 0x16u,
 } pb_command_t;
 
 typedef enum {
@@ -50,6 +51,7 @@ typedef struct {
     void (*commit_row)(void *ctx, uint32_t base_word_address);
     uint8_t (*verify_range)(void *ctx, uint32_t base_word_address, uint16_t word_count,
                             uint32_t expected_digest);
+    uint8_t (*read_words)(void *ctx, uint32_t base_word_address, uint16_t word_count, uint8_t *out);
     void (*run_target)(void *ctx);
     void *ctx;
 } pb_hal_t;

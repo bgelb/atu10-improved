@@ -92,10 +92,34 @@ impl ProgrammerDevice for HidProgrammer {
         Ok(())
     }
 
+    fn read_words(&mut self, base_word_address: u32, word_count: usize) -> Result<Vec<u16>> {
+        let word_count = u16::try_from(word_count)
+            .map_err(|_| Error::Device("read word count is too large".to_string()))?;
+        let mut payload = Vec::with_capacity(6);
+        payload.extend_from_slice(&base_word_address.to_le_bytes());
+        payload.extend_from_slice(&word_count.to_le_bytes());
+        let response = self.transport.command(Command::ReadWords, &payload)?;
+        decode_words(&response, usize::from(word_count))
+    }
+
     fn run_target(&mut self) -> Result<()> {
         self.transport.command(Command::RunTarget, &[])?;
         Ok(())
     }
+}
+
+fn decode_words(response: &[u8], word_count: usize) -> Result<Vec<u16>> {
+    if response.len() != word_count * 2 {
+        return Err(Error::Protocol(format!(
+            "read-words response has {} bytes, expected {}",
+            response.len(),
+            word_count * 2
+        )));
+    }
+    Ok(response
+        .chunks_exact(2)
+        .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]) & 0x3fff)
+        .collect())
 }
 
 pub struct HidTransport {
