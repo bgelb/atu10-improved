@@ -14,10 +14,11 @@ static void test_configuration_descriptor_total_length_is_consistent(void) {
 }
 
 static void test_endpoint_budget_stays_within_pic16f1454_limits(void) {
-    TEST_ASSERT_EQUAL_UINT8(0x02, pb_usb_config_descriptor[56]);
-    TEST_ASSERT_EQUAL_UINT8(0x82, pb_usb_config_descriptor[63]);
-    TEST_ASSERT_EQUAL_UINT8(0x01, pb_usb_config_descriptor[88]);
-    TEST_ASSERT_EQUAL_UINT8(0x81, pb_usb_config_descriptor[95]);
+    TEST_ASSERT_EQUAL_UINT8(0x83, pb_usb_config_descriptor[47]);
+    TEST_ASSERT_EQUAL_UINT8(0x02, pb_usb_config_descriptor[63]);
+    TEST_ASSERT_EQUAL_UINT8(0x82, pb_usb_config_descriptor[70]);
+    TEST_ASSERT_EQUAL_UINT8(0x01, pb_usb_config_descriptor[95]);
+    TEST_ASSERT_EQUAL_UINT8(0x81, pb_usb_config_descriptor[102]);
 }
 
 int main(void) {

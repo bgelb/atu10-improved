@@ -38,6 +38,31 @@ static void uart_write_string(const char *text) {
     uart_write_byte('\n');
 }
 
+static void startup_delay(void) {
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    unsigned long count = TC_UART_STARTUP_DELAY_CYCLES;
+    while (count-- > 0u) {
+        __asm("nop");
+    }
+#endif
+}
+
+static void pps_unlock(void) {
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    PPSLOCK = 0x55u;
+    PPSLOCK = 0xaau;
+    PPSLOCKbits.PPSLOCKED = 0u;
+#endif
+}
+
+static void pps_lock(void) {
+#if defined(__XC8) && TC_ENABLE_HW_UART
+    PPSLOCK = 0x55u;
+    PPSLOCK = 0xaau;
+    PPSLOCKbits.PPSLOCKED = 1u;
+#endif
+}
+
 static void board_init(void) {
 #if defined(__XC8) && TC_ENABLE_HW_UART
     OSCCON1 = 0x60u;
@@ -47,8 +72,14 @@ static void board_init(void) {
     ANSELB = 0x00u;
     ANSELC = 0x00u;
 
+    TRISBbits.TRISB6 = 0u;
+    TRISBbits.TRISB7 = 1u;
+    LATBbits.LATB6 = 1u;
+
+    pps_unlock();
     RXPPS = TC_UART_RX_PPS_INPUT;
     TC_UART_TX_PPS_REGISTER = TC_UART_TX_PPS_FUNCTION;
+    pps_lock();
 
     BAUD1CONbits.BRG16 = 1u;
     TX1STAbits.BRGH = 1u;
@@ -61,6 +92,7 @@ static void board_init(void) {
 
 int main(void) {
     board_init();
+    startup_delay();
     uart_write_string(tc_hello_line());
 
     for (;;) {

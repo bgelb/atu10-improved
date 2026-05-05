@@ -98,12 +98,16 @@ Host CLI examples:
 
 ```sh
 atu10ctl probe --fake
+atu10ctl read-id --fake
 atu10ctl flash --fake firmware/tuner-controller/build/tuner-controller.hex
 atu10ctl serial --fake
 atu10ctl probe --vid 0x1209 --pid 0xa710
+atu10ctl read-id --vid 0x1209 --pid 0xa710
 atu10ctl reset --vid 0x1209 --pid 0xa710
 atu10ctl flash --vid 0x1209 --pid 0xa710 firmware/tuner-controller/build/tuner-controller.hex
 atu10ctl serial --port /dev/cu.usbmodemXXXX --baud 115200
+atu10ctl console --port /dev/cu.usbmodemXXXX --baud 115200
+cargo xtask test-hardware --vid 0x1209 --pid 0xa710 --serial /dev/cu.usbmodemXXXX
 ```
 
 ## No-hardware test strategy
@@ -136,9 +140,11 @@ Hardware-only validation:
 
 ## Current status
 
-This is the initial infrastructure scaffold, not completed ATU firmware.
+This is infrastructure and bring-up firmware, not completed ATU firmware.
 
-Known hardware uncertainty: the source notes mention `RC4<->RB7` and
-`RC5<->RB7`, duplicating `RB7` on the tuner-controller side. Until the board is
-traced or schematic-confirmed, uncertain nets must stay centralized in board
-definition files.
+Confirmed ATU10 bridge nets are centralized in board definition files:
+PIC16F1454 RA4 drives F18877 MCLR, RC4 connects to F18877 RB7/ICSPDAT/UART RX,
+and RC5 connects to F18877 RB6/ICSPCLK/UART TX.
+
+The custom bridge still needs PIC16F1454 USB service-loop integration before it
+can replace the stock bridge for end-to-end HID+CDC operation.

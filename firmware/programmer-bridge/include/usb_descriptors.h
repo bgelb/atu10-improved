@@ -8,7 +8,8 @@
 #define PB_USB_EP0_SIZE 8u
 #define PB_USB_HID_EP_SIZE 64u
 #define PB_USB_CDC_EP_SIZE 64u
-#define PB_USB_CONFIG_TOTAL_LEN 100u
+#define PB_USB_CDC_NOTIFY_EP_SIZE 8u
+#define PB_USB_CONFIG_TOTAL_LEN 107u
 
 extern const uint8_t pb_usb_device_descriptor[18];
 extern const uint8_t pb_usb_config_descriptor[PB_USB_CONFIG_TOTAL_LEN];
